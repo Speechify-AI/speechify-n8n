@@ -6,6 +6,7 @@ import type {
 	ILoadOptionsFunctions,
 	INodeListSearchItems,
 	INodeListSearchResult,
+	INodePropertyOptions,
 } from 'n8n-workflow';
 
 // `package.json` is in tsconfig `include` with `resolveJsonModule`, and
@@ -105,4 +106,31 @@ export async function searchVoices(
 	results.sort((a, b) => a.name.localeCompare(b.name));
 
 	return { results };
+}
+
+// Backs the Model dropdown. `/v1/audio/models` is designed to drive exactly this
+// picker: it returns the models selectable on the synthesis endpoints, scoped to
+// the workspace's API version (a retired model is simply absent). Loading it live
+// means the node never ships a stale hard-coded model enum - a new Simba or a
+// retirement shows up without a package release. `dialogue_models` are omitted:
+// they are rejected on /v1/audio/speech.
+export async function getModels(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+	const response = (await speechifyApiRequest.call(this, 'GET', '/v1/audio/models')) as {
+		models?: IDataObject[];
+	};
+	const models = Array.isArray(response?.models) ? response.models : [];
+
+	const options: INodePropertyOptions[] = [];
+	for (const model of models) {
+		const value = String(model.id ?? '');
+		if (value === '') continue;
+		const markers = [
+			model.default ? 'default' : '',
+			model.recommended ? 'recommended' : '',
+			model.deprecated ? 'deprecated' : '',
+		].filter(Boolean);
+		const name = String(model.name ?? value) + (markers.length ? ` (${markers.join(', ')})` : '');
+		options.push({ name, value, description: String(model.description ?? '') });
+	}
+	return options;
 }

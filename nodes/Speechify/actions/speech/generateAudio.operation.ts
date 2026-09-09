@@ -102,31 +102,19 @@ export const description: INodeProperties[] = [
 					'Whether to normalize output loudness to a standard level (-14 LUFS). Useful for consistent volume across a batch. Adds some latency.',
 			},
 			{
-				displayName: 'Model',
+				displayName: 'Model Name or ID',
 				name: 'model',
 				type: 'options',
-				// The API accepts ONLY this enum (GetSpeechRequest.model); anything
-				// else 400s `model_retired`, so this is a closed dropdown, not the
-				// free-text field it started as. Default is `simba-3.0` to match
-				// the API's own default and because it is multilingual - defaulting
-				// to the English-only `simba-3.2` would 400 the moment a user picks
-				// a non-English voice, which this node lets them do.
-				options: [
-					{
-						name: 'Simba 3.0 (Multilingual)',
-						value: 'simba-3.0',
-						description:
-							'Streaming-native, multilingual (English plus de-DE, es-ES, es-MX, fr-FR, it-IT, pt-BR). The API default.',
-					},
-					{
-						name: 'Simba 3.2 (English Only)',
-						value: 'simba-3.2',
-						description:
-							'Lowest latency and richest expressivity, English only - a non-English voice returns 400',
-					},
-				],
-				default: 'simba-3.0',
-				description: 'Speechify TTS model to generate with',
+				// Loaded live from GET /v1/audio/models (scoped to the workspace's
+				// API version) instead of a hard-coded enum, so a new or retired
+				// Simba never needs a package release. Empty falls back to the API
+				// default (`simba-3.0`) in execute; a retired id 400s `model_retired`.
+				typeOptions: {
+					loadOptionsMethod: 'getModels',
+				},
+				default: '',
+				description:
+					'Speechify TTS model, loaded live from your workspace (leave empty for the API default, simba-3.0). Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Output Format',
