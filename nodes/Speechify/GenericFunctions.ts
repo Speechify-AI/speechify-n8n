@@ -6,6 +6,13 @@ import type {
 	ILoadOptionsFunctions,
 } from 'n8n-workflow';
 
+// `package.json` is in tsconfig `include` with `resolveJsonModule`, and
+// `n8n-node build` emits `dist/package.json`, so this resolves at both compile
+// and runtime. Sourcing the version here (rather than a hand-kept constant)
+// keeps `Speechify-Caller-Version` in lockstep with whatever release-please
+// bumped and published - a stale version header defeats the point of sending it.
+import { version as INTEGRATION_VERSION } from '../../package.json';
+
 export const SPEECHIFY_API_BASE_URL = 'https://api.speechify.ai';
 
 /**
@@ -17,8 +24,17 @@ export const SPEECHIFY_API_BASE_URL = 'https://api.speechify.ai';
  * so nothing sets it automatically - it MUST be added on every request below.
  * This exact header was silently dropped from the LiveKit integration once
  * already, so treat removing it as a regression, not a cleanup.
+ *
+ * `Speechify-Caller-Version` is a SECOND header, not a suffix on the slug: the
+ * slug is what every usage report groups by, so folding the version into it
+ * would make that grouping per-release. It carries this node's own release so
+ * Speechify can tell whether a fix we shipped has reached a customer's
+ * workflows yet. It is dropped server-side if malformed, so it never gates.
  */
-const ATTRIBUTION_HEADERS = { 'Speechify-Caller': 'n8n' };
+const ATTRIBUTION_HEADERS = {
+	'Speechify-Caller': 'n8n',
+	'Speechify-Caller-Version': INTEGRATION_VERSION,
+};
 
 export async function speechifyApiRequest<T = IDataObject>(
 	this: IExecuteFunctions | ILoadOptionsFunctions,

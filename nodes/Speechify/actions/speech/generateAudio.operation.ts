@@ -69,14 +69,27 @@ export const description: INodeProperties[] = [
 			{
 				displayName: 'Model',
 				name: 'model',
-				type: 'string',
-				// `simba-3.2` is Speechify's current recommended English model
-				// per the DevRel integration guidelines (Linear DRG-204,
-				// confirmed 2026-07-25). Kept as a plain overridable string
-				// rather than baked into the request so this node doesn't ship
-				// a stale default the way the VideoSDK/Mastra integrations did
-				// once Speechify moves the recommendation again.
-				default: 'simba-3.2',
+				type: 'options',
+				// The API accepts ONLY this enum (GetSpeechRequest.model); anything
+				// else 400s `model_retired`, so this is a closed dropdown, not the
+				// free-text field it started as. Default is `simba-3.0` to match
+				// the API's own default and because it is multilingual - defaulting
+				// to the English-only `simba-3.2` would 400 the moment a user picks
+				// a non-English voice, which this node lets them do.
+				options: [
+					{
+						name: 'Simba 3.0 (Multilingual)',
+						value: 'simba-3.0',
+						description: 'Streaming-native, multilingual (English plus de-DE, es-ES, es-MX, fr-FR, it-IT, pt-BR). The API default.',
+					},
+					{
+						name: 'Simba 3.2 (English Only)',
+						value: 'simba-3.2',
+						description:
+							'Lowest latency and richest expressivity, English only - a non-English voice returns 400',
+					},
+				],
+				default: 'simba-3.0',
 				description: 'Speechify TTS model to generate with',
 			},
 			{
@@ -118,7 +131,7 @@ export async function execute(
 				input: text,
 				voice_id: voiceId,
 				audio_format: audioFormat,
-				model: additionalFields.model || 'simba-3.2',
+				model: additionalFields.model || 'simba-3.0',
 			};
 
 			if (additionalFields.language) {

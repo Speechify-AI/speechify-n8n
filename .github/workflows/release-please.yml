@@ -1,0 +1,163 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      # `n8n-node build` runs tsc under the hood, so this doubles as the
+      # type-check gate — there is no separate `typecheck` script.
+      - name: Build
+        run: npm ci && npm run build
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Lint
+        run: npm ci && npm run lint
+
+  release-please:
+    needs: [build, lint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Install dependencies
+        run: npm ci
+      # release-please (release-type "node") already bumped package.json on the
+      # release commit; `n8n-node build` emits dist/ from that. Build BEFORE
+      # asserting so the assertion checks what npm actually ships.
+      - name: Build
+        run: npm run build
+      # Every version-bearing property must agree with the release tag before
+      # anything reaches npm: package.json version, and the repository URL
+      # casing (npm's provenance check rejects a case-inexact URL with HTTP 422).
+      - name: Assert versions match release tag
+        env:
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cat > "${RUNNER_TEMP}/assert-release-versions.cjs" <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const fail = (message) => {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          };
+
+          // include-v-in-tag is false, so the tag is bare semver. A leading "v" is
+          // tolerated so flipping that setting later cannot fail a valid release, and
+          // a prerelease/build suffix (0.1.0-alpha.1) is compared verbatim.
+          const BARE_SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+          const rawTag = (process.env.TAG_NAME || "").trim();
+          if (!rawTag) {
+            fail("TAG_NAME is empty — refusing to publish an unidentified release");
+          }
+          const tag = rawTag.startsWith("v") ? rawTag.slice(1) : rawTag;
+          if (!BARE_SEMVER.test(tag)) {
+            fail(`tag "${rawTag}" is not bare semver — refusing to publish`);
+          }
+
+          const packageJsonPath = path.join(process.cwd(), "package.json");
+          if (!fs.existsSync(packageJsonPath)) {
+            fail("package.json does not exist — the checkout is incomplete");
+          }
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+
+          // npm resolves repository.url to a repo slug for provenance and rejects a
+          // case-inexact one with HTTP 422, so compare case-sensitively.
+          const expectedRepositoryUrl = `https://github.com/${process.env.EXPECTED_REPOSITORY}`;
+          const declaredRepositoryUrl = String(packageJson.repository?.url)
+            .replace(/^git\+/, "")
+            .replace(/\.git$/, "");
+
+          console.log(`release tag: ${rawTag} (normalised: ${tag})`);
+          console.log(`  [${packageJson.version === tag ? "ok" : "MISMATCH"}] package.json version: ${packageJson.version}`);
+          console.log(`package.json repository.url:  ${packageJson.repository?.url}`);
+          console.log(`expected repository.url:      ${expectedRepositoryUrl}`);
+
+          const failures = [];
+          if (packageJson.version !== tag) {
+            failures.push(`package.json version is "${packageJson.version}", expected "${tag}"`);
+          }
+          if (declaredRepositoryUrl !== expectedRepositoryUrl) {
+            failures.push(
+              `package.json repository.url resolves to "${declaredRepositoryUrl}", expected ` +
+                `"${expectedRepositoryUrl}" — npm publish --provenance rejects a ` +
+                `case-inexact URL with HTTP 422`,
+            );
+          }
+
+          if (failures.length > 0) {
+            console.error("\nRefusing to publish:");
+            for (const failure of failures) {
+              console.error(`  - ${failure}`);
+            }
+            process.exit(1);
+          }
+
+          console.log(`\nAll version-bearing properties agree with ${tag}.`);
+          NODE
+          node "${RUNNER_TEMP}/assert-release-versions.cjs"
+      - name: Publish to npm
+        env:
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          if [[ "$TAG_NAME" == *alpha* ]]; then
+            npm publish --provenance --access public --tag alpha
+          elif [[ "$TAG_NAME" == *beta* ]]; then
+            npm publish --provenance --access public --tag beta
+          else
+            npm publish --provenance --access public
+          fi
