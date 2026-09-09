@@ -19,7 +19,7 @@ catalog of voices, via a REST API at `https://api.speechify.ai`.
 ## Installation
 
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/)
-in the n8n community nodes documentation, and install `n8n-nodes-speechify`.
+in the n8n community nodes documentation, and install `@speechify/n8n-nodes-speechify`.
 
 ## Operations
 
@@ -81,4 +81,4 @@ npm run lint
 
 ## License
 
-[Apache-2.0](LICENSE)
+[MIT](LICENSE)

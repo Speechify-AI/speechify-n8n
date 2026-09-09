@@ -1,17 +1,17 @@
 {
-	"node": "n8n-nodes-speechify.speechify",
+	"node": "@speechify/n8n-nodes-speechify.speechify",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["AI", "Marketing", "Communication"],
 	"resources": {
 		"credentialDocumentation": [
 			{
-				"url": "https://github.com/speechify-ai/n8n-nodes-speechify?tab=readme-ov-file#credentials"
+				"url": "https://github.com/speechify-ai/speechify-n8n?tab=readme-ov-file#credentials"
 			}
 		],
 		"primaryDocumentation": [
 			{
-				"url": "https://github.com/speechify-ai/n8n-nodes-speechify?tab=readme-ov-file"
+				"url": "https://github.com/speechify-ai/speechify-n8n?tab=readme-ov-file"
 			}
 		]
 	}
