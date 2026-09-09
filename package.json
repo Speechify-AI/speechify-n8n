@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"description": "n8n community node for the Speechify text-to-speech API",
 	"license": "MIT",
-	"homepage": "https://github.com/speechify-ai/speechify-n8n",
+	"homepage": "https://github.com/Speechify-AI/speechify-n8n",
 	"keywords": ["n8n-community-node-package"],
 	"author": {
 		"name": "Speechify",
@@ -11,19 +11,20 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/speechify-ai/speechify-n8n.git"
+		"url": "git+https://github.com/Speechify-AI/speechify-n8n.git"
 	},
 	"bugs": {
-		"url": "https://github.com/speechify-ai/speechify-n8n/issues"
+		"url": "https://github.com/Speechify-AI/speechify-n8n/issues"
+	},
+	"engines": {
+		"node": ">=20.15"
 	},
 	"scripts": {
 		"build": "n8n-node build",
 		"build:watch": "tsc --watch",
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
-		"lint:fix": "n8n-node lint --fix",
-		"release": "n8n-node release",
-		"prepublishOnly": "n8n-node prerelease"
+		"lint:fix": "n8n-node lint --fix"
 	},
 	"files": ["dist"],
 	"publishConfig": {
@@ -39,7 +40,6 @@
 		"@n8n/node-cli": "*",
 		"eslint": "9.32.0",
 		"prettier": "3.6.2",
-		"release-it": "^19.0.4",
 		"typescript": "5.9.2"
 	},
 	"peerDependencies": {

@@ -5,6 +5,11 @@ import type {
 	INodeProperties,
 } from 'n8n-workflow';
 
+// Kept in lockstep with the node's own request headers - see
+// nodes/Speechify/GenericFunctions.ts for why the version is sourced from
+// package.json rather than hand-maintained.
+import { version as INTEGRATION_VERSION } from '../package.json';
+
 export class SpeechifyApi implements ICredentialType {
 	name = 'speechifyApi';
 
@@ -39,10 +44,10 @@ export class SpeechifyApi implements ICredentialType {
 		},
 	};
 
-	// Only checks that the key is accepted. The `Speechify-Caller` attribution
-	// header is deliberately included here too (not just on the node's own
-	// requests) so the credential-test call is attributed the same way as
-	// every other outbound request - see nodes/Speechify/GenericFunctions.ts.
+	// Only checks that the key is accepted. The `Speechify-Caller[-Version]`
+	// attribution headers are deliberately included here too (not just on the
+	// node's own requests) so the credential-test call is attributed the same
+	// way as every other outbound request - see nodes/Speechify/GenericFunctions.ts.
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: 'https://api.speechify.ai',
@@ -50,6 +55,7 @@ export class SpeechifyApi implements ICredentialType {
 			method: 'GET',
 			headers: {
 				'Speechify-Caller': 'n8n',
+				'Speechify-Caller-Version': INTEGRATION_VERSION,
 			},
 		},
 	};
