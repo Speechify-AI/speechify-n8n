@@ -13,7 +13,7 @@ import { version as INTEGRATION_VERSION } from '../package.json';
 export class SpeechifyApi implements ICredentialType {
 	name = 'speechifyApi';
 
-	displayName = 'Speechify API';
+	displayName = 'SpeechifyAI API';
 
 	documentationUrl = 'https://docs.speechify.ai';
 
