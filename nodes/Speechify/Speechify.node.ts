@@ -6,7 +6,7 @@ import * as voice from './actions/voice';
 
 export class Speechify implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Speechify',
+		displayName: 'SpeechifyAI',
 		name: 'speechify',
 		icon: { light: 'file:speechify.svg', dark: 'file:speechify.dark.svg' },
 		group: ['transform'],
@@ -14,7 +14,7 @@ export class Speechify implements INodeType {
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
 		description: 'Generate speech and manage voices with the Speechify API',
 		defaults: {
-			name: 'Speechify',
+			name: 'SpeechifyAI',
 		},
 		// Programmatic style (not declarative `routing`) because Generate Audio
 		// returns base64 audio embedded in a JSON envelope that has to be
