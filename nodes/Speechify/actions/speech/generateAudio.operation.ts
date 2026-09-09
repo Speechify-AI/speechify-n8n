@@ -25,7 +25,8 @@ export const description: INodeProperties[] = [
 		default: '',
 		required: true,
 		displayOptions: showOnlyForThisOperation,
-		description: 'The text to convert to speech. Supports Speechify SSML for pronunciation and pacing control.',
+		description:
+			'The text to convert to speech (max 2000 characters). Supports Speechify SSML for pronunciation and pacing control.',
 	},
 	{
 		displayName: 'Voice ID',
@@ -125,6 +126,17 @@ export async function execute(
 				throw new NodeOperationError(this.getNode(), 'Text must not be empty', { itemIndex: i });
 			}
 
+			// The API caps `input` at 2000 chars (GetSpeechRequest.input). Catch
+			// it here so the failure names the limit, rather than returning an
+			// opaque 400 from the far side of the request.
+			if (text.length > 2000) {
+				throw new NodeOperationError(
+					this.getNode(),
+					`Text is ${text.length} characters; the Speechify limit is 2000. Split it across multiple items.`,
+					{ itemIndex: i },
+				);
+			}
+
 			const audioFormat = additionalFields.audioFormat ?? 'mp3';
 
 			const body: IDataObject = {
@@ -145,13 +157,29 @@ export async function execute(
 				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 			}
 
-			const audioBase64 = responseData.audio_data as string;
+			// `audio_data` is a required field on a 2xx (GetSpeechResponse), but
+			// guard it anyway: `Buffer.from(undefined, 'base64')` throws a raw
+			// "first argument must be of type string" TypeError, which is a
+			// baffling thing to surface to a workflow author. A typed message
+			// names the actual problem.
+			const audioBase64 = responseData.audio_data;
+			if (typeof audioBase64 !== 'string' || audioBase64.length === 0) {
+				throw new NodeOperationError(
+					this.getNode(),
+					'Speechify returned a response with no audio data',
+					{ itemIndex: i },
+				);
+			}
 			const buffer = Buffer.from(audioBase64, 'base64');
 			const responseFormat = (responseData.audio_format as string) ?? audioFormat;
+			// mp3's registered media type is audio/mpeg, not audio/mp3 - a wrong
+			// type trips strict downstream consumers (respond-to-webhook,
+			// Content-Type sniffing). The other formats map to audio/<format>.
+			const mimeType = responseFormat === 'mp3' ? 'audio/mpeg' : `audio/${responseFormat}`;
 			const binaryData = await this.helpers.prepareBinaryData(
 				buffer,
 				`speech.${responseFormat}`,
-				`audio/${responseFormat}`,
+				mimeType,
 			);
 
 			returnData.push({
