@@ -4,6 +4,8 @@ import type {
 	IHttpRequestMethods,
 	IHttpRequestOptions,
 	ILoadOptionsFunctions,
+	INodeListSearchItems,
+	INodeListSearchResult,
 } from 'n8n-workflow';
 
 // `package.json` is in tsconfig `include` with `resolveJsonModule`, and
@@ -71,4 +73,36 @@ export async function speechifyApiRequest<T = IDataObject>(
 	// attribution headers without the node needing to know the credential's
 	// shape.
 	return this.helpers.httpRequestWithAuthentication.call(this, 'speechifyApi', options) as Promise<T>;
+}
+
+// Backs the Voice resource-locator's "From List" mode. `/v1/voices` returns the
+// full catalogue in one response by default, so we filter client-side on the
+// term n8n passes as the user types. The label carries locale and gender so
+// two voices sharing a display name are still distinguishable.
+export async function searchVoices(
+	this: ILoadOptionsFunctions,
+	filter?: string,
+): Promise<INodeListSearchResult> {
+	const response = (await speechifyApiRequest.call(this, 'GET', '/v1/voices')) as
+		| IDataObject[]
+		| { voices?: IDataObject[] };
+	const voices = Array.isArray(response) ? response : (response?.voices ?? []);
+
+	const term = filter?.toLowerCase().trim();
+	const results: INodeListSearchItems[] = [];
+	for (const voice of voices) {
+		const value = String(voice.id ?? voice.voice_id ?? '');
+		if (value === '') continue;
+		const displayName = String(voice.display_name ?? voice.name ?? value);
+		const locale = voice.locale ?? voice.language;
+		const gender = voice.gender;
+		const label = [displayName, locale, gender].filter(Boolean).join(' · ');
+		if (term && !label.toLowerCase().includes(term) && !value.toLowerCase().includes(term)) {
+			continue;
+		}
+		results.push({ name: label, value });
+	}
+	results.sort((a, b) => a.name.localeCompare(b.name));
+
+	return { results };
 }
