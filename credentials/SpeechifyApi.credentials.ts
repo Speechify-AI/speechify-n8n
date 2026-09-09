@@ -53,6 +53,11 @@ export class SpeechifyApi implements ICredentialType {
 			baseURL: 'https://api.speechify.ai',
 			url: '/v1/voices',
 			method: 'GET',
+			// `limit=1` keeps the connection test to a single voice instead of
+			// pulling the whole catalogue just to confirm the key is accepted.
+			qs: {
+				limit: 1,
+			},
 			headers: {
 				'Speechify-Caller': 'n8n',
 				'Speechify-Caller-Version': INTEGRATION_VERSION,

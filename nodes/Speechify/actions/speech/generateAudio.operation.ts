@@ -29,14 +29,49 @@ export const description: INodeProperties[] = [
 			'The text to convert to speech (max 2000 characters). Supports Speechify SSML for pronunciation and pacing control.',
 	},
 	{
-		displayName: 'Voice ID',
-		name: 'voiceId',
-		type: 'string',
+		displayName: 'Model Name or ID',
+		name: 'model',
+		type: 'options',
+		// Top-level (not in Additional Fields) because Voice and Language depend
+		// on it - n8n can only read a dependency that is a top-level parameter,
+		// not a sibling inside a collection. Loaded live from GET /v1/audio/models
+		// so the list never ships a stale enum. Empty falls back to the API
+		// default (simba-3.0) in execute.
+		typeOptions: {
+			loadOptionsMethod: 'getModels',
+		},
 		default: '',
-		required: true,
 		displayOptions: showOnlyForThisOperation,
 		description:
-			'The voice to generate audio with. Use the Voice resource\'s "Get Many" operation to look up available voice IDs.',
+			'Speechify TTS model, loaded live from your workspace (leave empty for the API default, simba-3.0). It determines which voices and languages are valid. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+	},
+	{
+		displayName: 'Voice',
+		name: 'voiceId',
+		type: 'resourceLocator',
+		default: { mode: 'list', value: '' },
+		required: true,
+		displayOptions: showOnlyForThisOperation,
+		description: 'The voice to generate audio with',
+		modes: [
+			{
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				typeOptions: {
+					searchListMethod: 'searchVoices',
+					searchable: true,
+				},
+			},
+			{
+				displayName: 'By ID',
+				name: 'id',
+				type: 'string',
+				placeholder: 'e.g. scott',
+				// Voice IDs are opaque slugs, so no validation pattern - anything
+				// the catalogue returns is valid, and a wrong one is a clean 400.
+			},
+		],
 	},
 	{
 		displayName: 'Binary Property',
@@ -59,47 +94,71 @@ export const description: INodeProperties[] = [
 				name: 'audioFormat',
 				type: 'options',
 				options: [
-					{ name: 'MP3', value: 'mp3' },
-					{ name: 'WAV', value: 'wav' },
-					{ name: 'OGG', value: 'ogg' },
 					{ name: 'AAC', value: 'aac' },
+					{ name: 'MP3', value: 'mp3' },
+					{ name: 'OGG', value: 'ogg' },
+					{ name: 'WAV', value: 'wav' },
 				],
 				default: 'mp3',
 				description: 'Audio container format for the generated file',
 			},
 			{
-				displayName: 'Model',
-				name: 'model',
+				displayName: 'Language Name or ID',
+				name: 'language',
 				type: 'options',
-				// The API accepts ONLY this enum (GetSpeechRequest.model); anything
-				// else 400s `model_retired`, so this is a closed dropdown, not the
-				// free-text field it started as. Default is `simba-3.0` to match
-				// the API's own default and because it is multilingual - defaulting
-				// to the English-only `simba-3.2` would 400 the moment a user picks
-				// a non-English voice, which this node lets them do.
-				options: [
-					{
-						name: 'Simba 3.0 (Multilingual)',
-						value: 'simba-3.0',
-						description: 'Streaming-native, multilingual (English plus de-DE, es-ES, es-MX, fr-FR, it-IT, pt-BR). The API default.',
-					},
-					{
-						name: 'Simba 3.2 (English Only)',
-						value: 'simba-3.2',
-						description:
-							'Lowest latency and richest expressivity, English only - a non-English voice returns 400',
-					},
-				],
-				default: 'simba-3.0',
-				description: 'Speechify TTS model to generate with',
+				// Scoped to the selected Model's supported languages (falls back to
+				// the union across models when Model is empty). `loadOptionsDependsOn`
+				// reloads the list when Model changes; the method reads Model via
+				// getCurrentNodeParameter. Empty = the voice's own default.
+				typeOptions: {
+					loadOptionsMethod: 'getLanguages',
+					loadOptionsDependsOn: ['model'],
+				},
+				default: '',
+				description:
+					'BCP-47 language override; leave empty to use the voice default. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
-				displayName: 'Language',
-				name: 'language',
-				type: 'string',
-				default: '',
-				placeholder: 'en-US',
-				description: 'BCP-47 language code override. Leave empty to use the voice default.',
+				displayName: 'Loudness Normalization',
+				name: 'loudnessNormalization',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether to normalize output loudness to a standard level (-14 LUFS). Useful for consistent volume across a batch. Adds some latency.',
+			},
+			{
+				displayName: 'Output Format',
+				name: 'outputFormat',
+				type: 'options',
+				// Advanced codec_sampleRate_bitrate control. When set it takes
+				// precedence over Audio Format. `pcm_16000` and `ulaw_8000` (PCMU)
+				// are the telephony formats Twilio/LiveKit SIP expect; `mp3_*_160`
+				// are the max-fidelity mp3s and are Simba-3-only.
+				options: [
+					{ name: 'AAC · 24 KHz', value: 'aac_24000' },
+					{ name: 'MP3 · 22 KHz · 128 Kbps', value: 'mp3_22050_128' },
+					{ name: 'MP3 · 24 KHz · 128 Kbps', value: 'mp3_24000_128' },
+					{ name: 'MP3 · 24 KHz · 160 Kbps (Simba 3)', value: 'mp3_24000_160' },
+					{ name: 'MP3 · 24 KHz · 64 Kbps', value: 'mp3_24000_64' },
+					{ name: 'OGG · 24 KHz', value: 'ogg_24000' },
+					{ name: 'PCM · 16 KHz (Telephony)', value: 'pcm_16000' },
+					{ name: 'PCM · 24 KHz', value: 'pcm_24000' },
+					{ name: 'PCM · 8 KHz', value: 'pcm_8000' },
+					{ name: 'PCMU · 8 KHz (Telephony)', value: 'ulaw_8000' },
+					{ name: 'WAV · 24 KHz', value: 'wav_24000' },
+					{ name: 'WAV · 48 KHz', value: 'wav_48000' },
+				],
+				default: 'mp3_24000_128',
+				description:
+					'Precise codec/sample-rate/bitrate. Overrides Audio Format when set. Leave unset to use Audio Format.',
+			},
+			{
+				displayName: 'Text Normalization',
+				name: 'textNormalization',
+				type: 'boolean',
+				default: true,
+				description:
+					'Whether to expand numbers, dates, etc. into words (e.g. "55" becomes "fifty five"). Adds some latency. On by default.',
 			},
 		],
 	},
@@ -114,13 +173,24 @@ export async function execute(
 	for (let i = 0; i < items.length; i++) {
 		try {
 			const text = this.getNodeParameter('text', i) as string;
-			const voiceId = this.getNodeParameter('voiceId', i) as string;
+			// `voiceId` is a resourceLocator; extractValue pulls the underlying id
+			// out of whichever mode (list/id) the user chose.
+			const voiceId = this.getNodeParameter('voiceId', i, '', { extractValue: true }) as string;
+			const model = this.getNodeParameter('model', i, '') as string;
 			const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 			const additionalFields = this.getNodeParameter('additionalFields', i, {}) as {
 				audioFormat?: string;
-				model?: string;
 				language?: string;
+				loudnessNormalization?: boolean;
+				textNormalization?: boolean;
+				outputFormat?: string;
 			};
+
+			if (!voiceId) {
+				throw new NodeOperationError(this.getNode(), 'A voice must be selected', {
+					itemIndex: i,
+				});
+			}
 
 			if (!text.trim()) {
 				throw new NodeOperationError(this.getNode(), 'Text must not be empty', { itemIndex: i });
@@ -143,11 +213,30 @@ export async function execute(
 				input: text,
 				voice_id: voiceId,
 				audio_format: audioFormat,
-				model: additionalFields.model || 'simba-3.0',
+				model: model || 'simba-3.0',
 			};
 
 			if (additionalFields.language) {
 				body.language = additionalFields.language;
+			}
+
+			// `output_format` (codec_sampleRate_bitrate) takes precedence over
+			// `audio_format` server-side, so only send it when the user set it.
+			if (additionalFields.outputFormat) {
+				body.output_format = additionalFields.outputFormat;
+			}
+
+			// Only send `options` the user actually toggled - omitting a field
+			// leaves the API on its own default (loudness off, text norm on).
+			const speechOptions: IDataObject = {};
+			if (additionalFields.loudnessNormalization !== undefined) {
+				speechOptions.loudness_normalization = additionalFields.loudnessNormalization;
+			}
+			if (additionalFields.textNormalization !== undefined) {
+				speechOptions.text_normalization = additionalFields.textNormalization;
+			}
+			if (Object.keys(speechOptions).length > 0) {
+				body.options = speechOptions;
 			}
 
 			let responseData: IDataObject;
