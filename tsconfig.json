@@ -16,6 +16,10 @@
 		"esModuleInterop": true,
 		"resolveJsonModule": true,
 		"incremental": true,
+		// Keep the incremental-build cache OUT of dist/ - dist/ is the published
+		// tarball (`files: ["dist"]`), and shipping tsconfig.tsbuildinfo bloated
+		// the package ~4x with a file consumers have no use for.
+		"tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo",
 		"declaration": true,
 		"sourceMap": true,
 		"skipLibCheck": true,
