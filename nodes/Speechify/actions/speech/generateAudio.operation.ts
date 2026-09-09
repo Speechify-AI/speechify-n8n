@@ -29,6 +29,23 @@ export const description: INodeProperties[] = [
 			'The text to convert to speech (max 2000 characters). Supports Speechify SSML for pronunciation and pacing control.',
 	},
 	{
+		displayName: 'Model Name or ID',
+		name: 'model',
+		type: 'options',
+		// Top-level (not in Additional Fields) because Voice and Language depend
+		// on it - n8n can only read a dependency that is a top-level parameter,
+		// not a sibling inside a collection. Loaded live from GET /v1/audio/models
+		// so the list never ships a stale enum. Empty falls back to the API
+		// default (simba-3.0) in execute.
+		typeOptions: {
+			loadOptionsMethod: 'getModels',
+		},
+		default: '',
+		displayOptions: showOnlyForThisOperation,
+		description:
+			'Speechify TTS model, loaded live from your workspace (leave empty for the API default, simba-3.0). It determines which voices and languages are valid. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+	},
+	{
 		displayName: 'Voice',
 		name: 'voiceId',
 		type: 'resourceLocator',
@@ -86,12 +103,20 @@ export const description: INodeProperties[] = [
 				description: 'Audio container format for the generated file',
 			},
 			{
-				displayName: 'Language',
+				displayName: 'Language Name or ID',
 				name: 'language',
-				type: 'string',
+				type: 'options',
+				// Scoped to the selected Model's supported languages (falls back to
+				// the union across models when Model is empty). `loadOptionsDependsOn`
+				// reloads the list when Model changes; the method reads Model via
+				// getCurrentNodeParameter. Empty = the voice's own default.
+				typeOptions: {
+					loadOptionsMethod: 'getLanguages',
+					loadOptionsDependsOn: ['model'],
+				},
 				default: '',
-				placeholder: 'en-US',
-				description: 'BCP-47 language code override. Leave empty to use the voice default.',
+				description:
+					'BCP-47 language override; leave empty to use the voice default. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Loudness Normalization',
@@ -100,21 +125,6 @@ export const description: INodeProperties[] = [
 				default: false,
 				description:
 					'Whether to normalize output loudness to a standard level (-14 LUFS). Useful for consistent volume across a batch. Adds some latency.',
-			},
-			{
-				displayName: 'Model Name or ID',
-				name: 'model',
-				type: 'options',
-				// Loaded live from GET /v1/audio/models (scoped to the workspace's
-				// API version) instead of a hard-coded enum, so a new or retired
-				// Simba never needs a package release. Empty falls back to the API
-				// default (`simba-3.0`) in execute; a retired id 400s `model_retired`.
-				typeOptions: {
-					loadOptionsMethod: 'getModels',
-				},
-				default: '',
-				description:
-					'Speechify TTS model, loaded live from your workspace (leave empty for the API default, simba-3.0). Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Output Format',
@@ -166,10 +176,10 @@ export async function execute(
 			// `voiceId` is a resourceLocator; extractValue pulls the underlying id
 			// out of whichever mode (list/id) the user chose.
 			const voiceId = this.getNodeParameter('voiceId', i, '', { extractValue: true }) as string;
+			const model = this.getNodeParameter('model', i, '') as string;
 			const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 			const additionalFields = this.getNodeParameter('additionalFields', i, {}) as {
 				audioFormat?: string;
-				model?: string;
 				language?: string;
 				loudnessNormalization?: boolean;
 				textNormalization?: boolean;
@@ -203,7 +213,7 @@ export async function execute(
 				input: text,
 				voice_id: voiceId,
 				audio_format: audioFormat,
-				model: additionalFields.model || 'simba-3.0',
+				model: model || 'simba-3.0',
 			};
 
 			if (additionalFields.language) {

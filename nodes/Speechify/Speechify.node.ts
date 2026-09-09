@@ -3,7 +3,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import * as speech from './actions/speech';
 import * as voice from './actions/voice';
-import { getModels, searchVoices } from './GenericFunctions';
+import { getLanguages, getModels, searchVoices } from './GenericFunctions';
 
 export class Speechify implements INodeType {
 	description: INodeTypeDescription = {
@@ -55,6 +55,7 @@ export class Speechify implements INodeType {
 		},
 		loadOptions: {
 			getModels,
+			getLanguages,
 		},
 	};
 
