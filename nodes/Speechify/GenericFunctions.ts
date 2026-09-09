@@ -36,6 +36,11 @@ const ATTRIBUTION_HEADERS = {
 	'Speechify-Caller-Version': INTEGRATION_VERSION,
 };
 
+// A 429 surfaces as a NodeApiError that n8n's own per-node "Retry On Fail"
+// setting (with a retry interval) is designed to handle - and it honours a
+// paused/resumed run without blocking a worker. A custom sleep-and-retry here
+// would need `setTimeout`, which n8n Cloud's node sandbox forbids (it breaks
+// verification), so retry is deliberately left to the platform, not built in.
 export async function speechifyApiRequest<T = IDataObject>(
 	this: IExecuteFunctions | ILoadOptionsFunctions,
 	method: IHttpRequestMethods,

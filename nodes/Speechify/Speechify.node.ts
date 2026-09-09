@@ -50,6 +50,12 @@ export class Speechify implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
+		// Nothing to synthesize or look up per input item, and reading item-0
+		// parameters below assumes an item exists - return an empty branch
+		// rather than indexing into an empty set.
+		if (items.length === 0) {
+			return [[]];
+		}
 		// `resource`/`operation` are structural dropdowns (noDataExpression),
 		// so they're fixed for the whole node execution - read them once from
 		// item 0 rather than per item, like the rest of the properties below.
