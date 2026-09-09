@@ -1,4 +1,4 @@
-# SpeechifyAI @speechify/n8n-nodes-speechify
+# SpeechifyAI n8n Node
 
 This is an n8n community node. It lets you use [Speechify](https://speechify.com)'s
 text-to-speech API in your n8n workflows.
